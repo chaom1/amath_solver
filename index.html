@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Find the highest-scoring A-Math equations for one board line." />
+    <meta name="theme-color" content="#f7f7f4" />
+    <title>A-Math Line Solver</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="A-Math Line Solver home">
+        <span class="brand-mark" aria-hidden="true">=</span>
+      </a>
+      <button id="languageButton" class="language-button" type="button" aria-label="Switch language">ไทย</button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1 data-i18n="title">find the possible equation</h1>
+        <p data-i18n="subtitle">Add the tiles on the board and in your hand, then find the top 30 solutions.</p>
+      </section>
+
+      <section class="workspace" aria-label="Solver input">
+        <div class="step-card">
+          <div class="step-heading">
+            <span class="step-number">1</span>
+            <div>
+              <h2 data-i18n="boardTitle">Tiles on the Board</h2>
+            </div>
+          </div>
+
+          <div class="line-controls">
+            <label for="lineLength" data-i18n="lineLength">Line length</label>
+            <div class="number-stepper">
+              <button id="decreaseLength" type="button" aria-label="Decrease line length">−</button>
+              <output id="lineLengthValue" for="lineLength">13</output>
+              <button id="increaseLength" type="button" aria-label="Increase line length">+</button>
+            </div>
+            <input id="lineLength" type="range" min="3" max="15" value="13" />
+          </div>
+
+          <div class="board-wrap">
+            <div id="boardCells" class="board-cells" role="grid" aria-label="Board line"></div>
+          </div>
+          <div class="legend">
+            <span><i class="legend-dot locked"></i><span data-i18n="locked">Tile on the Board</span></span>
+            <span><i class="legend-dot selected"></i><span data-i18n="selected">Selected</span></span>
+            <button id="clearBoard" class="text-button danger" type="button" data-i18n="clearBoard">Clear board</button>
+          </div>
+
+          <div class="palette-block">
+            <div class="palette-label-row">
+              <span class="field-label" data-i18n="lockedPalette">Locked tile palette</span>
+              <span class="microcopy" data-i18n="tapTileToggle">Tap a tile to add or remove it</span>
+            </div>
+            <div id="boardPalette" class="tile-palette"></div>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-heading">
+            <span class="step-number">2</span>
+            <div>
+              <h2 data-i18n="handTitle">Add the tiles in your hand</h2>
+            </div>
+          </div>
+
+          <div id="handRack" class="hand-rack" aria-live="polite"></div>
+          <div class="hand-meta">
+            <span id="handCount">0 / 15</span>
+            <button id="clearHand" class="text-button danger" type="button" data-i18n="clearHand">Clear hand</button>
+          </div>
+
+          <div class="palette-block">
+            <div class="palette-label-row">
+              <span class="field-label" data-i18n="handPalette">Hand tile palette</span>
+              <span class="microcopy" data-i18n="tapTileToggle">Tap a tile to add or remove it</span>
+            </div>
+            <div id="handPalette" class="tile-palette"></div>
+          </div>
+        </div>
+
+        <div class="solve-panel">
+          <label class="toggle-row" for="bingoOnly">
+            <span>
+              <strong data-i18n="bingoOnly">Bingo only</strong>
+            </span>
+            <span class="switch"><input id="bingoOnly" type="checkbox" /><i></i></span>
+          </label>
+          <button id="solveButton" class="solve-button" type="button">
+            <span data-i18n="solve">Find best equations</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <p id="solveError" class="solve-error" role="alert"></p>
+        </div>
+      </section>
+
+      <section id="resultsSection" class="results-section" aria-labelledby="resultsTitle" hidden>
+        <div class="results-heading">
+          <div>
+            <p class="eyebrow" data-i18n="ranked">RANKED BY SCORE</p>
+            <h2 id="resultsTitle" data-i18n="results">Best equations</h2>
+          </div>
+          <span id="resultCount" class="result-count"></span>
+        </div>
+        <div id="searchNotice" class="search-notice" hidden></div>
+        <div id="resultsList" class="results-list"></div>
+      </section>
+    </main>
+
+    <dialog id="assignmentDialog" class="assignment-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
+        <p class="eyebrow" data-i18n="chooseValue">CHOOSE ITS VALUE</p>
+        <h2 id="assignmentTitle">Blank tile</h2>
+        <p data-i18n="assignmentHelp">This records the physical tile and the value shown on the board.</p>
+        <div id="assignmentOptions" class="assignment-options"></div>
+      </form>
+    </dialog>
+
+    <div id="loadingOverlay" class="loading-overlay" hidden>
+      <div class="loader"></div>
+      <strong data-i18n="searching">Searching legal equations…</strong>
+      <small data-i18n="searchingHelp">Exact arithmetic, no rounding</small>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

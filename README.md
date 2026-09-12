@@ -1,28 +1,7 @@
 # A-Math Line Solver
 
-A bilingual, browser-only solver for finding and ranking legal A-Math equations along one board line. It models physical tile identity, locked cells, flexible and blank assignments, exact fractional arithmetic, and the 40-point eight-tile bingo bonus.
+A-Math Line Solver is a bilingual, browser-based tool for finding the highest-scoring legal A-Math equations that can be formed on a single line of the board. Users enter any tiles already fixed on the board, add the tiles in their hand, and the solver searches for possible equations before ranking the best results by score.
 
-## Run locally
+The solver preserves the identity and point value of every physical tile, including blank and flexible-operation tiles. It validates equation structure, supports standard operator precedence and chained equalities, and uses exact fractional arithmetic so its results do not depend on rounding. Scores include the value of all tiles in an equation and a 40-point bonus when eight tiles from the hand are used.
 
-```bash
-npm run dev
-```
-
-Then open <http://localhost:4173>.
-
-## Verify
-
-```bash
-npm test
-npm run check
-```
-
-No packages or build step are required. The site can be deployed to any static host.
-
-## First-version scope
-
-- One selectable line of 3–15 cells
-- Empty-board first moves, or connection to at least one locked tile when locked tiles exist
-- Up to 15 hand tiles and the top 30 ranked results
-- Normal cells only; board multipliers are intentionally deferred
-- A search guard keeps unusually large analysis hands responsive. If it is reached, the interface labels the results as partial.
+The project supports board lines from 3 to 15 cells, hands of up to 15 tiles, and displays up to 30 ranked results. It can analyze an empty-board first move or build an equation through locked tiles already on the selected line. Board multipliers are not included. To keep large searches responsive, the solver uses an analysis limit and clearly marks results as partial when that limit is reached.

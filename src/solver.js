@@ -2,7 +2,17 @@ import { TILE_DEFINITIONS, assignmentsFor, createTile, faceLabel, tileRole } fro
 
 const DEFAULT_LIMIT = 30;
 const DEFAULT_MAX_NODES = 2_000_000;
-const DEFAULT_TIME_LIMIT = 3000;
+const DEFAULT_TIME_LIMIT = null;
+
+const PREFIX_SEGMENT_START = 0;
+const PREFIX_AFTER_UNARY_MINUS = 1;
+const PREFIX_AFTER_OPERATOR = 2;
+const PREFIX_DIGIT_ZERO = 3;
+const PREFIX_DIGIT_ONE = 4;
+const PREFIX_DIGIT_TWO = 5;
+const PREFIX_DIGIT_THREE = 6;
+const PREFIX_NUMBER_TILE = 7;
+const PREFIX_INVALID = -1;
 
 function abs(value) { return value < 0n ? -value : value; }
 
@@ -158,8 +168,12 @@ function resultKey(result) {
   return `${result.start}|${result.cells.map((cell) => `${cell.source}:${tileKey(cell)}`).join("|")}`;
 }
 
+function compareText(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function resultComparator(a, b) {
-  return b.score - a.score || b.usedCount - a.usedCount || a.cells.length - b.cells.length || a.equation.localeCompare(b.equation) || a.start - b.start;
+  return b.score - a.score || b.usedCount - a.usedCount || a.cells.length - b.cells.length || compareText(a.equation, b.equation) || a.start - b.start;
 }
 
 function pushResult(results, seen, result, limit) {
@@ -184,6 +198,33 @@ function visibleEquation(cells) {
   return cells.map((cell) => faceLabel(cell.face)).join("");
 }
 
+// Search visits millions of prefixes. Full equation analysis uses exact BigInt
+// arithmetic, but most prefixes can be rejected using grammar alone. Keeping
+// this tiny state machine incremental avoids reparsing the entire prefix at
+// every node; exact arithmetic is still used before a result is accepted.
+function advancePrefix(state, tile) {
+  const role = tileRole(tile);
+  const expectingNumber = state <= PREFIX_AFTER_OPERATOR;
+
+  if (role === "digit") {
+    if (expectingNumber) return String(tile.face) === "0" ? PREFIX_DIGIT_ZERO : PREFIX_DIGIT_ONE;
+    if (state === PREFIX_DIGIT_ONE) return PREFIX_DIGIT_TWO;
+    if (state === PREFIX_DIGIT_TWO) return PREFIX_DIGIT_THREE;
+    return PREFIX_INVALID;
+  }
+
+  if (role === "number") return expectingNumber ? PREFIX_NUMBER_TILE : PREFIX_INVALID;
+
+  if (role === "equals") {
+    return state >= PREFIX_DIGIT_ZERO ? PREFIX_SEGMENT_START : PREFIX_INVALID;
+  }
+
+  if (state === PREFIX_SEGMENT_START) {
+    return tile.face === "-" ? PREFIX_AFTER_UNARY_MINUS : PREFIX_INVALID;
+  }
+  return state >= PREFIX_DIGIT_ZERO ? PREFIX_AFTER_OPERATOR : PREFIX_INVALID;
+}
+
 export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMIT, timeLimitMs = DEFAULT_TIME_LIMIT, maxNodes = DEFAULT_MAX_NODES }) {
   const started = Date.now();
   const normalizedBoard = board.map((tile) => tile ? normalizeInputTile(tile, "board") : null);
@@ -194,7 +235,7 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
     entry.count += 1;
     grouped.set(tile.type, entry);
   }
-  const rackTypes = [...grouped.values()].sort((a, b) => b.tile.score - a.tile.score || a.tile.type.localeCompare(b.tile.type));
+  const rackTypes = [...grouped.values()].sort((a, b) => b.tile.score - a.tile.score || compareText(a.tile.type, b.tile.type));
   const counts = rackTypes.map((entry) => entry.count);
   const results = [];
   const seen = new Set();
@@ -219,11 +260,18 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
   }
   spans.sort((a, b) => b.estimate - a.estimate || b.emptyCount - a.emptyCount);
 
-  const timedOut = () => {
+  const hasTimeLimit = Number.isFinite(timeLimitMs) && timeLimitMs > 0;
+  const budgetReached = () => {
+    if (nodes >= maxNodes) {
+      stopped = true;
+      return true;
+    }
     nodes += 1;
-    if ((nodes & 2047) !== 0) return false;
-    stopped = nodes >= maxNodes || Date.now() - started >= timeLimitMs;
-    return stopped;
+    if (hasTimeLimit && (nodes & 2047) === 0 && Date.now() - started >= timeLimitMs) {
+      stopped = true;
+      return true;
+    }
+    return false;
   };
 
   for (const span of spans) {
@@ -231,8 +279,8 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
     const cells = [];
     let handScore = 0;
 
-    const visit = (position, usedCount) => {
-      if (stopped || timedOut()) return;
+    const visit = (position, usedCount, prefixState) => {
+      if (stopped || budgetReached()) return;
       if (position > span.end) {
         const analysis = analyzeEquation(cells, true);
         if (!analysis.complete || usedCount < 1 || (bingoOnly && usedCount < 8)) return;
@@ -254,9 +302,12 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
 
       const locked = normalizedBoard[position];
       if (locked) {
-        cells.push(locked);
-        if (analyzeEquation(cells, false).valid) visit(position + 1, usedCount);
-        cells.pop();
+        const nextState = advancePrefix(prefixState, locked);
+        if (nextState !== PREFIX_INVALID) {
+          cells.push(locked);
+          visit(position + 1, usedCount, nextState);
+          cells.pop();
+        }
         return;
       }
 
@@ -267,9 +318,12 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
         handScore += entry.tile.score;
         for (const assigned of assignmentsFor(entry.tile)) {
           const placed = { ...assigned, source: "hand" };
-          cells.push(placed);
-          if (analyzeEquation(cells, false).valid) visit(position + 1, usedCount + 1);
-          cells.pop();
+          const nextState = advancePrefix(prefixState, placed);
+          if (nextState !== PREFIX_INVALID) {
+            cells.push(placed);
+            visit(position + 1, usedCount + 1, nextState);
+            cells.pop();
+          }
           if (stopped) break;
         }
         handScore -= entry.tile.score;
@@ -278,7 +332,7 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
       }
     };
 
-    visit(span.start, 0);
+    visit(span.start, 0, PREFIX_SEGMENT_START);
   }
 
   return {

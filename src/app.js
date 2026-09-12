@@ -293,7 +293,9 @@ function solve() {
     worker?.terminate();
     worker = null;
   }, { once: true });
-  worker.postMessage({ board, hand, bingoOnly: elements.bingoOnly.checked, limit: 30, timeLimitMs: 3500, maxNodes: 2_500_000 });
+  // A deterministic node budget gives the same answers across browsers. A
+  // wall-clock cutoff made slower devices stop at different search states.
+  worker.postMessage({ board, hand, bingoOnly: elements.bingoOnly.checked, limit: 30, maxNodes: 5_000_000 });
 }
 
 elements.languageButton.addEventListener("click", () => {

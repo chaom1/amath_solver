@@ -85,3 +85,21 @@ test("adds 40 points for eight hand tiles", () => {
   assert.equal(match.usedCount, 8);
   assert.equal(match.bingoBonus, 40);
 });
+
+test("finds the same top bingo on the reported 15-cell position", () => {
+  const board = Array(15).fill(null);
+  ["7", "=", "19", "-", "12"].forEach((type, index) => {
+    board[index + 5] = createTile(type, null, "board");
+  });
+  const hand = tokens(["+-", "14", "3", "5", "5", "9", "?", "?"]);
+
+  const output = solveLine({ board, hand, maxNodes: 5_000_000 });
+  const match = output.results.find((result) => result.equation === "3−57=19−12×14+95");
+
+  assert.equal(output.complete, true);
+  assert.ok(match);
+  assert.equal(match.usedCount, 8);
+  assert.equal(match.baseScore, 26);
+  assert.equal(match.bingoBonus, 40);
+  assert.equal(match.score, 66);
+});

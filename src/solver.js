@@ -4,6 +4,13 @@ const DEFAULT_LIMIT = 30;
 const DEFAULT_MAX_NODES = 2_000_000;
 const DEFAULT_TIME_LIMIT = null;
 
+export const SCORE_BONUSES = Object.freeze({
+  tile2: { label: "2T", tileMultiplier: 2, equationMultiplier: 1 },
+  tile3: { label: "3T", tileMultiplier: 3, equationMultiplier: 1 },
+  equation2: { label: "2E", tileMultiplier: 1, equationMultiplier: 2 },
+  equation3: { label: "3E", tileMultiplier: 1, equationMultiplier: 3 },
+});
+
 const PREFIX_SEGMENT_START = 0;
 const PREFIX_AFTER_UNARY_MINUS = 1;
 const PREFIX_AFTER_OPERATOR = 2;
@@ -225,7 +232,7 @@ function advancePrefix(state, tile) {
   return state >= PREFIX_DIGIT_ZERO ? PREFIX_AFTER_OPERATOR : PREFIX_INVALID;
 }
 
-export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMIT, timeLimitMs = DEFAULT_TIME_LIMIT, maxNodes = DEFAULT_MAX_NODES }) {
+export function solveLine({ board, bonuses = [], hand, bingoOnly = false, limit = DEFAULT_LIMIT, timeLimitMs = DEFAULT_TIME_LIMIT, maxNodes = DEFAULT_MAX_NODES }) {
   const started = Date.now();
   const normalizedBoard = board.map((tile) => tile ? normalizeInputTile(tile, "board") : null);
   const normalizedHand = hand.map((tile) => normalizeInputTile(tile, "hand"));
@@ -255,7 +262,16 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
       if (bingoOnly && emptyCount < 8) continue;
       const boardScore = slice.reduce((sum, tile) => sum + (tile?.score ?? 0), 0);
       const highestRackScores = normalizedHand.map((tile) => tile.score).sort((a, b) => b - a).slice(0, emptyCount);
-      spans.push({ start, end, emptyCount, estimate: boardScore + highestRackScores.reduce((a, b) => a + b, 0) + (emptyCount >= 8 ? 40 : 0) });
+      const tileMultipliers = slice
+        .map((tile, index) => tile ? 1 : (SCORE_BONUSES[bonuses[start + index]]?.tileMultiplier ?? 1))
+        .filter((_, index) => !slice[index])
+        .sort((a, b) => b - a);
+      const equationMultiplier = slice.reduce((product, tile, index) => {
+        if (tile) return product;
+        return product * (SCORE_BONUSES[bonuses[start + index]]?.equationMultiplier ?? 1);
+      }, 1);
+      const rackEstimate = highestRackScores.reduce((sum, score, index) => sum + score * tileMultipliers[index], 0);
+      spans.push({ start, end, emptyCount, estimate: (boardScore + rackEstimate) * equationMultiplier + (emptyCount >= 8 ? 40 : 0) });
     }
   }
   spans.sort((a, b) => b.estimate - a.estimate || b.emptyCount - a.emptyCount);
@@ -285,6 +301,14 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
         const analysis = analyzeEquation(cells, true);
         if (!analysis.complete || usedCount < 1 || (bingoOnly && usedCount < 8)) return;
         const baseScore = cells.reduce((sum, tile) => sum + tile.score, 0);
+        let equationScore = 0;
+        let equationMultiplier = 1;
+        cells.forEach((tile, index) => {
+          const bonus = tile.source === "hand" ? SCORE_BONUSES[bonuses[span.start + index]] : null;
+          equationScore += tile.score * (bonus?.tileMultiplier ?? 1);
+          equationMultiplier *= bonus?.equationMultiplier ?? 1;
+        });
+        equationScore *= equationMultiplier;
         const bingoBonus = usedCount >= 8 ? 40 : 0;
         pushResult(results, seen, {
           start: span.start,
@@ -292,8 +316,9 @@ export function solveLine({ board, hand, bingoOnly = false, limit = DEFAULT_LIMI
           cells: cells.map((cell) => ({ ...cell })),
           equation: visibleEquation(cells),
           baseScore,
+          bonusScore: equationScore - baseScore,
           bingoBonus,
-          score: baseScore + bingoBonus,
+          score: equationScore + bingoBonus,
           usedCount,
           value: analysis.value ? `${analysis.value.n}/${analysis.value.d}` : null
         }, limit);

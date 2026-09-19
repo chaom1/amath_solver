@@ -86,6 +86,23 @@ test("adds 40 points for eight hand tiles", () => {
   assert.equal(match.bingoBonus, 40);
 });
 
+test("applies special squares only to newly placed tiles", () => {
+  const board = [createTile("1", null, "board"), null, null];
+  const hand = tokens(["=", "1"]);
+  const output = solveLine({
+    board,
+    hand,
+    bonuses: ["tile3", "equation2", "tile2"],
+    timeLimitMs: 1000,
+  });
+  const match = output.results.find((result) => result.equation === "1=1");
+
+  assert.ok(match);
+  assert.equal(match.baseScore, 3);
+  assert.equal(match.bonusScore, 5);
+  assert.equal(match.score, 8);
+});
+
 test("finds the same top bingo on the reported 15-cell position", () => {
   const board = Array(15).fill(null);
   ["7", "=", "19", "-", "12"].forEach((type, index) => {

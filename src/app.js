@@ -1,4 +1,5 @@
 import { TILE_DEFINITIONS, TILE_ORDER, assignmentsFor, createTile, faceLabel } from "./tiles.js";
+import { SCORE_BONUSES } from "./solver.js";
 
 const translations = {
   en: {
@@ -13,13 +14,15 @@ const translations = {
     ranked: "RANKED BY SCORE", results: "Best equations",
     chooseValue: "CHOOSE ITS VALUE", assignmentHelp: "This records the physical tile and the value shown on the board.",
     searching: "Searching legal equations…", searchingHelp: "Exact arithmetic, no rounding", blankTile: "Blank tile", flexibleTile: "Flexible tile",
-    placed: "Placed", score: "points", baseScore: "Tile score", bingoBonus: "Bingo bonus", used: "hand tiles used",
+    placed: "Placed", score: "points", baseScore: "Tile score", specialBonus: "Special-square bonus", bingoBonus: "Bingo bonus", used: "hand tiles used",
+    scoreSquares: "Special score squares", scoreSquaresHelp: "Select a cell and choose a bonus; tap it again to remove",
+    tile2: "Double tile", tile3: "Triple tile", equation2: "Double equation", equation3: "Triple equation",
     completeSearch: "Search complete", partialSearch: "The analysis limit was reached. These are the best results found so far; try fewer hand tiles for an exhaustive search.",
     noResults: "No legal equations found", noResultsHelp: "Try adding an equals tile, changing the locked tiles, or turning off Bingo only.",
     needHand: "Add at least one tile to your hand.",
     handFull: "The hand can contain at most 15 tiles.", workerError: "The solver could not start. Please reload and try again.",
     resultCount: "{count} result", resultCountPlural: "{count} results",
-    removeTile: "Remove {tile}", selectCell: "Select empty cell {cell}", removeLocked: "Remove locked tile from cell {cell}",
+    removeTile: "Remove {tile}", selectCell: "Select empty cell {cell}", removeLocked: "Remove locked tile from cell {cell}", removeBonus: "Remove score bonus from cell {cell}",
     addTile: "Add {tile}", placeTile: "Place {tile} in selected cell", lineLabel: "Board line with {count} cells"
   },
   th: {
@@ -34,13 +37,15 @@ const translations = {
     ranked: "เรียงตามคะแนน", results: "สมการที่ดีที่สุด",
     chooseValue: "เลือกค่าของเบี้ย", assignmentHelp: "ระบบจะจำทั้งชนิดเบี้ยจริงและค่าที่แสดงอยู่บนกระดาน",
     searching: "กำลังค้นหาสมการที่ถูกต้อง…", searchingHelp: "คำนวณแบบแม่นยำ ไม่มีการปัดเศษ", blankTile: "เบี้ย Blank", flexibleTile: "เบี้ยเครื่องหมายเลือกได้",
-    placed: "วางใหม่", score: "คะแนน", baseScore: "คะแนนเบี้ย", bingoBonus: "โบนัสบิงโก", used: "เบี้ยจากมือที่ใช้",
+    placed: "วางใหม่", score: "คะแนน", baseScore: "คะแนนเบี้ย", specialBonus: "โบนัสช่องพิเศษ", bingoBonus: "โบนัสบิงโก", used: "เบี้ยจากมือที่ใช้",
+    scoreSquares: "ช่องคะแนนพิเศษ", scoreSquaresHelp: "เลือกช่องและโบนัส แตะช่องนั้นอีกครั้งเพื่อนำออก",
+    tile2: "เบี้ยสองเท่า", tile3: "เบี้ยสามเท่า", equation2: "สมการสองเท่า", equation3: "สมการสามเท่า",
     completeSearch: "ค้นหาครบแล้ว", partialSearch: "ถึงขีดจำกัดการวิเคราะห์แล้ว นี่คือคำตอบที่ดีที่สุดที่พบ ลองลดจำนวนเบี้ยเพื่อค้นหาแบบครบทั้งหมด",
     noResults: "ไม่พบสมการที่ถูกต้อง", noResultsHelp: "ลองเพิ่มเครื่องหมายเท่ากับ เปลี่ยนเบี้ยล็อก หรือปิดตัวกรองเฉพาะบิงโก",
     needHand: "กรุณาใส่เบี้ยในมืออย่างน้อย 1 ตัว",
     handFull: "ใส่เบี้ยในมือได้สูงสุด 15 ตัว", workerError: "ไม่สามารถเริ่มตัวค้นหาได้ กรุณารีโหลดแล้วลองอีกครั้ง",
     resultCount: "{count} คำตอบ", resultCountPlural: "{count} คำตอบ",
-    removeTile: "นำ {tile} ออก", selectCell: "เลือกช่องว่างที่ {cell}", removeLocked: "นำเบี้ยล็อกออกจากช่อง {cell}",
+    removeTile: "นำ {tile} ออก", selectCell: "เลือกช่องว่างที่ {cell}", removeLocked: "นำเบี้ยล็อกออกจากช่อง {cell}", removeBonus: "นำโบนัสออกจากช่อง {cell}",
     addTile: "เพิ่ม {tile}", placeTile: "วาง {tile} ในช่องที่เลือก", lineLabel: "แนวกระดาน {count} ช่อง"
   }
 };
@@ -48,14 +53,16 @@ const translations = {
 const browserThai = navigator.language?.toLowerCase().startsWith("th");
 let language = localStorage.getItem("amath-language") || (browserThai ? "th" : "en");
 let board = Array(13).fill(null);
+let bonuses = Array(13).fill(null);
 let hand = [];
 let selectedCell = 6;
 let worker = null;
 let lastSolveBoardLength = 13;
+let lastSolveBonuses = [];
 let lastResultsPayload = null;
 
 const elements = Object.fromEntries([
-  "languageButton", "lineLength", "lineLengthValue", "decreaseLength", "increaseLength", "boardCells", "boardPalette",
+  "languageButton", "lineLength", "lineLengthValue", "decreaseLength", "increaseLength", "boardCells", "boardPalette", "bonusPalette",
   "clearBoard", "handRack", "handCount", "clearHand", "handPalette",
   "bingoOnly", "solveButton", "solveError", "resultsSection", "resultCount", "searchNotice", "resultsList",
   "assignmentDialog", "assignmentTitle", "assignmentOptions", "loadingOverlay"
@@ -101,6 +108,14 @@ function tileButton(type, purpose) {
 function renderPalettes() {
   elements.boardPalette.replaceChildren(...TILE_ORDER.map((type) => tileButton(type, "board")));
   elements.handPalette.replaceChildren(...TILE_ORDER.map((type) => tileButton(type, "hand")));
+  elements.bonusPalette.replaceChildren(...Object.entries(SCORE_BONUSES).map(([type, definition]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `bonus-button bonus-${type}`;
+    button.innerHTML = `<strong>${definition.label}</strong><span>${t(type)}</span>`;
+    button.addEventListener("click", () => addScoreBonus(type));
+    return button;
+  }));
 }
 
 function tileMarkup(tile, options = {}) {
@@ -116,14 +131,20 @@ function renderBoard() {
   elements.boardCells.replaceChildren(...board.map((tile, index) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `board-cell${tile ? " has-tile" : ""}${index === selectedCell ? " is-selected" : ""}`;
+    const bonus = bonuses[index];
+    button.className = `board-cell${tile ? " has-tile" : ""}${bonus && !tile ? ` bonus-${bonus}` : ""}${index === selectedCell ? " is-selected" : ""}`;
     button.setAttribute("role", "gridcell");
     button.dataset.index = String(index);
-    button.innerHTML = tile ? tileMarkup(tile) : `<span>${index + 1}</span>`;
-    button.setAttribute("aria-label", tile ? t("removeLocked", { cell: index + 1 }) : t("selectCell", { cell: index + 1 }));
+    button.innerHTML = tile ? tileMarkup(tile) : `${bonus ? `<b>${SCORE_BONUSES[bonus].label}</b>` : ""}<span>${index + 1}</span>`;
+    button.setAttribute("aria-label", tile
+      ? t("removeLocked", { cell: index + 1 })
+      : t(bonus ? "removeBonus" : "selectCell", { cell: index + 1 }));
     button.addEventListener("click", () => {
       if (board[index]) {
         board[index] = null;
+        selectedCell = index;
+      } else if (bonuses[index]) {
+        bonuses[index] = null;
         selectedCell = index;
       } else selectedCell = index;
       invalidateResults();
@@ -131,6 +152,13 @@ function renderBoard() {
     });
     return button;
   }));
+}
+
+function addScoreBonus(type) {
+  if (selectedCell == null || board[selectedCell]) return;
+  bonuses[selectedCell] = bonuses[selectedCell] === type ? null : type;
+  invalidateResults();
+  renderBoard();
 }
 
 function renderHand() {
@@ -219,6 +247,8 @@ function setLineLength(value) {
   const length = Math.max(3, Math.min(15, Number(value)));
   if (length > board.length) board.push(...Array(length - board.length).fill(null));
   else if (length < board.length) board = board.slice(0, length);
+  if (length > bonuses.length) bonuses.push(...Array(length - bonuses.length).fill(null));
+  else if (length < bonuses.length) bonuses = bonuses.slice(0, length);
   selectedCell = Math.min(selectedCell ?? 0, length - 1);
   elements.lineLength.value = String(length);
   elements.lineLengthValue.textContent = String(length);
@@ -253,11 +283,12 @@ function renderResults(payload, shouldScroll = true) {
         </div>
         <div class="result-board" role="grid" style="--result-cell-count:${lastSolveBoardLength}">
           ${resultCells.map((cell, index) => cell
-            ? `<div class="result-cell ${cell.source}" role="gridcell"><span class="cell-number">${index + 1}</span>${tileMarkup(cell)}<b>${cell.source === "board" ? t("locked") : t("placed")}</b></div>`
-            : `<div class="result-cell empty" role="gridcell"><span class="cell-number">${index + 1}</span></div>`).join("")}
+            ? `<div class="result-cell ${cell.source}${cell.source === "hand" && lastSolveBonuses[index] ? ` bonus-${lastSolveBonuses[index]}` : ""}" role="gridcell"><span class="cell-number">${index + 1}</span>${tileMarkup(cell)}<b>${cell.source === "board" ? t("locked") : t("placed")}</b>${cell.source === "hand" && lastSolveBonuses[index] ? `<i>${SCORE_BONUSES[lastSolveBonuses[index]].label}</i>` : ""}</div>`
+            : `<div class="result-cell empty${lastSolveBonuses[index] ? ` bonus-${lastSolveBonuses[index]}` : ""}" role="gridcell"><span class="cell-number">${index + 1}</span>${lastSolveBonuses[index] ? `<i>${SCORE_BONUSES[lastSolveBonuses[index]].label}</i>` : ""}</div>`).join("")}
         </div>
         <div class="result-details">
           <span>${t("baseScore")} <strong>${result.baseScore}</strong></span>
+          ${result.bonusScore ? `<span>${t("specialBonus")} <strong>+${result.bonusScore}</strong></span>` : ""}
           ${result.bingoBonus ? `<span>${t("bingoBonus")} <strong>+${result.bingoBonus}</strong></span>` : ""}
           <span><strong>${result.usedCount}</strong> ${t("used")}</span>
         </div>`;
@@ -276,6 +307,7 @@ function solve() {
   if (worker) worker.terminate();
   worker = new Worker(new URL("./solver-worker.js", import.meta.url), { type: "module" });
   lastSolveBoardLength = board.length;
+  lastSolveBonuses = [...bonuses];
   elements.loadingOverlay.hidden = false;
   elements.solveButton.disabled = true;
   worker.addEventListener("message", (event) => {
@@ -295,7 +327,7 @@ function solve() {
   }, { once: true });
   // A deterministic node budget gives the same answers across browsers. A
   // wall-clock cutoff made slower devices stop at different search states.
-  worker.postMessage({ board, hand, bingoOnly: elements.bingoOnly.checked, limit: 30, maxNodes: 5_000_000 });
+  worker.postMessage({ board, bonuses, hand, bingoOnly: elements.bingoOnly.checked, limit: 30, maxNodes: 5_000_000 });
 }
 
 elements.languageButton.addEventListener("click", () => {
@@ -306,7 +338,7 @@ elements.languageButton.addEventListener("click", () => {
 elements.lineLength.addEventListener("input", (event) => setLineLength(event.target.value));
 elements.decreaseLength.addEventListener("click", () => setLineLength(board.length - 1));
 elements.increaseLength.addEventListener("click", () => setLineLength(board.length + 1));
-elements.clearBoard.addEventListener("click", () => { board = Array(board.length).fill(null); selectedCell = Math.floor(board.length / 2); invalidateResults(); renderBoard(); });
+elements.clearBoard.addEventListener("click", () => { board = Array(board.length).fill(null); bonuses = Array(board.length).fill(null); selectedCell = Math.floor(board.length / 2); invalidateResults(); renderBoard(); });
 elements.clearHand.addEventListener("click", () => { hand = []; invalidateResults(); renderHand(); });
 elements.solveButton.addEventListener("click", solve);
 elements.bingoOnly.addEventListener("change", invalidateResults);
